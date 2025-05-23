@@ -5,30 +5,30 @@ require_once 'includes/db.php';
 $erreur = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $login = $_POST['login'] ?? '';
+    $login = htmlspecialchars(trim($_POST['login'] ?? ''));
     $password = $_POST['password'] ?? '';
 
-    $tables = ['Patient' => 'P', 'Membre_Famille' => 'M', 'Aide_Soignant' => 'A'];
+    $stmt = $connexion->prepare("SELECT * FROM Utilisateur WHERE Login = ?");
+    $stmt->bind_param("s", $login);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $user = $res->fetch_assoc();
 
-    foreach ($tables as $table => $alias) {
-        $stmt = $connexion->prepare("SELECT * FROM $table WHERE Login$alias = ?");
-        $stmt->bind_param("s", $login);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $utilisateur = $result->fetch_assoc();
+    if ($user && password_verify($password, $user['Mdp'])) {
+        $_SESSION['utilisateur'] = $user['Login'];
+        $_SESSION['role'] = $user['Role'];
+        $_SESSION['idU'] = $user['IdU'];
+        $_SESSION['is_admin'] = ($user['Role'] === 'admin');
 
-        if ($utilisateur && password_verify($password, $utilisateur["mdp$alias"])) {
-            $_SESSION['utilisateur'] = $login;
-            $_SESSION['role'] = strtolower($table === 'Membre_Famille' ? 'membre_famille' : $table);
-            $_SESSION['id'] = $utilisateur["Id$alias"];
-            header('Location: dashboard.php');
-            exit;
-        }
+        // Redirection vers un tableau de bord unique
+        header('Location: dashboard.php');
+        exit;
+    } else {
+        $erreur = "Identifiants incorrects.";
     }
-
-    $erreur = "Identifiants incorrects.";
 }
 ?>
+
 
 <!DOCTYPE html>
 <html lang="fr">

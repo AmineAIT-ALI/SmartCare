@@ -3,17 +3,21 @@ require_once 'includes/session.php';
 require_once 'includes/db.php';
 verifierRole('patient');
 
-$idP = $_SESSION['id'];
+// Récupération de l'identifiant patient à partir de l'utilisateur connecté
+$idU = $_SESSION['idU'] ?? 0;
+$stmt = $connexion->prepare("SELECT IdP FROM Patient WHERE IdU = ?");
+$stmt->bind_param("i", $idU);
+$stmt->execute();
+$res = $stmt->get_result();
+$idP = $res->fetch_assoc()['IdP'] ?? 0;
 
 // Récupération des prises du jour non encore confirmées
 $query = "
-    SELECT p.IdPrise, p.HeurePrise, m.NomMed, pr.DatePres
+    SELECT p.IdPrise, p.HeurePrise, m.NomMed
     FROM Prise_Medicament p
     JOIN concerne c ON p.IdPrise = c.IdPrise
     JOIN Medicament m ON m.IdMed = c.IdMed
-    JOIN prescris prx ON c.IdMed = prx.IdMed
-    JOIN Prescription pr ON prx.IdPres = pr.IdPres
-    WHERE pr.IdP = ? AND DATE(p.HeurePrise) = CURDATE()
+    WHERE p.IdP = ? AND DATE(p.HeurePrise) = CURDATE() AND p.Confirme = 0
     ORDER BY p.HeurePrise ASC
 ";
 
@@ -22,7 +26,6 @@ $stmt->bind_param("i", $idP);
 $stmt->execute();
 $result = $stmt->get_result();
 ?>
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -35,17 +38,22 @@ $result = $stmt->get_result();
   <h1>SmartCare</h1>
   <nav>
     <ul>
-      <li><a href="dashboard.php">Accueil</a></li>
-      <li><a href="historique_patient.php">Historique</a></li>
-      <li><a href="prise_du_jour.php">Ma prise</a></li>
+      <li><a href="dashboard.php">Tableau de bord</a></li>
       <li><a href="logout.php">Déconnexion</a></li>
     </ul>
   </nav>
 </header>
 
 <main>
-  <section>
+  <section class="card fade-in">
     <h2>Mes prises de médicaments aujourd’hui</h2>
+
+    <?php if (isset($_GET['success']) && $_GET['success'] == '1'): ?>
+      <p class="success">Prise confirmée avec succès !</p>
+    <?php elseif (isset($_GET['success']) && $_GET['success'] == '0'): ?>
+      <p class="alert">Échec lors de la confirmation.</p>
+    <?php endif; ?>
+
     <?php if ($result->num_rows === 0): ?>
       <p class="info">Aucune prise prévue aujourd’hui ou toutes déjà confirmées.</p>
     <?php else: ?>
@@ -60,7 +68,7 @@ $result = $stmt->get_result();
         <tbody>
           <?php while ($row = $result->fetch_assoc()): ?>
             <tr>
-              <td><?= htmlspecialchars(substr($row['HeurePrise'], 0, 5)) ?></td>
+              <td><?= htmlspecialchars(substr($row['HeurePrise'], 11, 5)) ?></td>
               <td><?= htmlspecialchars($row['NomMed']) ?></td>
               <td>
                 <form action="prise_confirm.php" method="POST">
